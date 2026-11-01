@@ -5,6 +5,8 @@ import type { ChatSource } from "./chat-source.ts";
 export type ChatSession = {
   id: string; user_id: string; dashboard_key: string; dashboard_id: string | null;
   video_identifier: string | null; title: string; created_at: string; updated_at: string;
+  /** Questions and answers saved in the chat (read with the list, for sorting by length) */
+  message_count?: number;
 };
 export type MessageRow = {
   id: string; session_id: string; request_id: string; role: "user" | "assistant"; content: string;
@@ -47,13 +49,18 @@ export function messagesFromRows(rows: MessageRow[], source: string): ChatMessag
     ...messages.filter(m => m.sender === "bot" && m.requestId === question.requestId)]);
 }
 
+/** A listed row with its embedded `chat_messages(count)` flattened to `message_count`. */
+export function withMessageCount({ chat_messages, ...session }: ChatSession & { chat_messages?: { count: number }[] }): ChatSession {
+  return { ...session, message_count: chat_messages?.[0]?.count ?? 0 };
+}
+
 export function createChatRepository(client: SupabaseClient, accountId: string, source: ChatSource): ChatRepository {
   const check = (error: { message: string } | null) => { if (error) throw new Error(error.message); };
   const list = (dashboardKey: string | null) => allPages<ChatSession>(async (from, to) => {
-    let query = client.from("chat_sessions").select("*").eq("user_id", accountId);
+    let query = client.from("chat_sessions").select("*, chat_messages(count)").eq("user_id", accountId);
     if (dashboardKey) query = query.eq("dashboard_key", dashboardKey);
     const { data, error } = await query.order("updated_at", { ascending: false }).order("id").range(from, to);
-    check(error); return data ?? [];
+    check(error); return (data ?? []).map(withMessageCount);
   });
   return {
     sessions: () => list(source.key),
