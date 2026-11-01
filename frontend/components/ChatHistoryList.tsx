@@ -6,13 +6,17 @@ import { Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
 import type { ChatController, ChatState } from "@/lib/chat-controller";
 import type { ChatSession } from "@/lib/chat-store";
 import { chatHref, dashboardLabel, dashboardTicker, everyChat, normalizeTicker } from "@/lib/dashboards";
+import { NO_SEARCH, searchChats, tickerCounts, type ChatSearch } from "@/lib/chat-search";
 import { useCustomTickers } from "@/lib/use-custom-tickers";
+import ChatHistorySearch from "./ChatHistorySearch";
+import Segmented from "./Segmented";
 
-/** This dashboard's chats, or every dashboard's */
-export type HistoryScope = "call" | "all";
+/** Which chats the history shows: this dashboard's, or every dashboard's narrowed by `search` */
+export type HistoryView = { scope: "call" | "all"; search: ChatSearch };
+export const DEFAULT_HISTORY_VIEW: HistoryView = { scope: "call", search: NO_SEARCH };
 
-export default function ChatHistoryList({ controller, state, scope, onScopeChange, onSelect }: {
-  controller: ChatController; state: ChatState; scope: HistoryScope; onScopeChange: (scope: HistoryScope) => void;
+export default function ChatHistoryList({ controller, state, view, onViewChange, onSelect }: {
+  controller: ChatController; state: ChatState; view: HistoryView; onViewChange: (view: HistoryView) => void;
   onSelect?: () => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
@@ -23,6 +27,13 @@ export default function ChatHistoryList({ controller, state, scope, onScopeChang
   const urlTicker = useSearchParams().get("ticker");
   const customTickers = useCustomTickers();
   const key = controller.source.key;
+  const { scope, search } = view;
+  // Typing re-ranks after a short pause; clearing applies at once
+  const [debouncedQuery, setDebouncedQuery] = useState(search.query);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(search.query), 150);
+    return () => clearTimeout(timer);
+  }, [search.query]);
 
   // Re-read the other dashboards' chats whenever "All chats" is shown (or this dashboard changes)
   useEffect(() => { if (scope === "all") void controller.loadAll(); }, [scope, controller]);
@@ -34,7 +45,10 @@ export default function ChatHistoryList({ controller, state, scope, onScopeChang
     session.dashboard_key === key ? currentTicker : dashboardTicker(session, customTickers);
 
   const all = scope === "all";
-  const sessions = all ? everyChat(state.sessions, state.allSessions ?? [], key) : state.sessions;
+  const labelOf = (session: ChatSession) => dashboardLabel(session, tickerOf(session));
+  const listed = all ? everyChat(state.sessions, state.allSessions ?? [], key) : state.sessions;
+  const searching = all && (!!search.query.trim() || search.tickers.length > 0);
+  const sessions = all ? searchChats(listed, labelOf, { ...search, query: search.query.trim() ? debouncedQuery : "" }) : listed;
   // Only the first list load shows a placeholder; opening a chat must not shift the list
   const listLoading = all ? !state.allSessions : state.loading && !state.sessions.length;
 
@@ -52,19 +66,20 @@ export default function ChatHistoryList({ controller, state, scope, onScopeChang
         <button type="button" aria-label="Refresh chat history" disabled={state.busy || state.loading}
           className="cursor-pointer disabled:opacity-40" onClick={() => void controller.refresh()}><RefreshCw className="size-3.5" /></button>
       </div>
-      <div role="group" aria-label="Show chats from" className="grid shrink-0 grid-cols-2 gap-0.5 rounded-lg border border-white/8 bg-pill p-0.5 text-xs font-medium">
-        {(["call", "all"] as const).map(value => (
-          <button key={value} type="button" aria-pressed={scope === value} onClick={() => onScopeChange(value)}
-            className={`cursor-pointer truncate rounded-md px-2 py-1 transition-colors ${scope === value
-              ? "bg-accent text-brand" : "text-muted-foreground hover:text-foreground"}`}>
-            {value === "all" ? "All chats" : `${dashboardLabel(current, currentTicker)} chats`}
-          </button>
-        ))}
-      </div>
+      <Segmented label="Show chats from" value={scope} onChange={value => onViewChange({ ...view, scope: value })}
+        options={[{ value: "call", label: `${dashboardLabel(current, currentTicker)} chats` }, { value: "all", label: "All chats" }]} />
+      {all && <ChatHistorySearch search={search} onChange={next => onViewChange({ ...view, search: next })}
+        tickers={tickerCounts(listed, labelOf, search.tickers)} />}
       <div className="scrollbar-none min-h-0 flex-1 space-y-2 overflow-auto">
         {listLoading && <p className="text-xs text-muted-foreground">Loading history…</p>}
-        {!listLoading && !sessions.length && <p className="text-xs text-muted-foreground">
+        {!listLoading && !listed.length && <p className="text-xs text-muted-foreground">
           {all ? "No saved chats yet." : "No saved chats for this call."} Send a message to start one.</p>}
+        {!listLoading && listed.length > 0 && !sessions.length && searching && <div className="text-xs text-muted-foreground" role="status">
+          <p>{search.query.trim() ? `No chats match “${search.query.trim()}”${search.tickers.length ? " in the selected tickers" : ""}.`
+            : "No chats for the selected tickers."}</p>
+          <button type="button" className="mt-2 cursor-pointer text-brand" onClick={() => onViewChange({ ...view, search: NO_SEARCH })}>
+            Clear search and filters</button>
+        </div>}
         {!listLoading && sessions.map(session => (
           <div key={session.id} className={`relative rounded-lg border p-2 transition-colors ${state.sessionId === session.id
             ? "border-brand/50 bg-white/5" : "border-white/8 hover:bg-white/5"}`}>
