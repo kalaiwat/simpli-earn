@@ -28,6 +28,8 @@ import time
 sys.path.append(str(Path(__file__).parent.parent / "RAG"))
 sys.path.append(str(Path(__file__).parent.parent / "sentiment"))
 
+from youtube_ids import extract_video_id
+
 try:
     from supabase import create_client
     import assemblyai as aai
@@ -82,13 +84,7 @@ class DashboardCreator:
                 
     def extract_video_id(self, url):
         """Extract YouTube video ID from URL"""
-        if "v=" in url:
-            return url.split("v=")[1].split("&")[0]
-        elif "youtu.be/" in url:
-            return url.split("youtu.be/")[1].split("?")[0]
-        elif "youtube.com/live/" in url:
-            return url.split("youtube.com/live/")[1].split("?")[0]
-        return None
+        return extract_video_id(url)
         
     def get_youtube_metadata(self, video_id):
         """Get video metadata from YouTube Data API"""

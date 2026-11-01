@@ -19,6 +19,8 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+from youtube_ids import extract_video_id
+
 router = APIRouter()
 
 # Jobs this instance is running (also mirrored to youtube_jobs, see _save_job)
@@ -121,16 +123,6 @@ def _dashboard_project_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def _extract_video_id(youtube_url: str) -> Optional[str]:
-    if "v=" in youtube_url:
-        return youtube_url.split("v=")[1].split("&")[0]
-    if "youtu.be/" in youtube_url:
-        return youtube_url.split("youtu.be/")[1].split("?")[0]
-    if "youtube.com/live/" in youtube_url:
-        return youtube_url.split("youtube.com/live/")[1].split("?")[0]
-    return None
-
-
 _ANALYSIS_FILES = ("transcript_filename", "relevance_filename", "specificity_filename")
 
 
@@ -216,7 +208,7 @@ def run_dashboard_creation(
         )
 
         if result.returncode == 0:
-            _finish_job(job_id, "completed", video_id=_extract_video_id(youtube_url))
+            _finish_job(job_id, "completed", video_id=extract_video_id(youtube_url))
         else:
             # Keep the tail: the failing step is printed last, after the progress banner
             err_msg = ((result.stdout or "") + (result.stderr or "")).strip()[-1500:] or "Unknown error"
@@ -243,7 +235,7 @@ async def create_dashboard(
     `force` on a complete dashboard needs an admin (DASHBOARD_ADMIN_*) and replaces it.
     """
     user = _request_user(authorization)
-    video_id = _extract_video_id(request.youtube_url)
+    video_id = extract_video_id(request.youtube_url)
     existing = _existing_analysis(video_id)
     complete = bool(existing) and all(existing.get(k) for k in _ANALYSIS_FILES)
     if complete and not request.force:
@@ -297,7 +289,7 @@ async def create_dashboard(
 
     # Same video already processing (e.g. submitted twice): reuse that job
     for job in jobs.values():
-        if job["status"] in ("pending", "running") and _extract_video_id(job["youtube_url"]) == video_id:
+        if job["status"] in ("pending", "running") and extract_video_id(job["youtube_url"]) == video_id:
             return {
                 "job_id": job["job_id"],
                 "status": job["status"],

@@ -3,6 +3,7 @@ from fastapi import FastAPI, Query, Body, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from transcript_retrieval import get_video_transcript, get_video_transcript_entries, save_transcript_as_txt, extract_video_id
+from youtube_ids import extract_video_id as parse_video_id
 from langchain_testing import initialize_retrieval, answer_question, generate_follow_up_questions
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -462,9 +463,7 @@ def _resolve_chat_transcript(req: ChatRequest, source_key: str) -> tuple[Optiona
         return cached, None
 
     if req.video_url:
-        video_id = None
-        if "v=" in req.video_url:
-            video_id = req.video_url.split("v=")[1].split("&")[0]
+        video_id = parse_video_id(req.video_url)
 
         transcript_path = None
         if video_id and supabase:
@@ -802,11 +801,7 @@ VIDEO_ID_MAPPINGS = {
 
 
 def _normalize_video_id(dashboard_id: Optional[str], video_url: Optional[str]) -> Optional[str]:
-    if video_url and "v=" in video_url:
-        return video_url.split("v=")[1].split("&")[0]
-    if video_url and "youtu.be/" in video_url:
-        return video_url.split("youtu.be/")[1].split("?")[0]
-    return VIDEO_ID_MAPPINGS.get(str(dashboard_id or "")) if dashboard_id else None
+    return parse_video_id(video_url) or (VIDEO_ID_MAPPINGS.get(str(dashboard_id)) if dashboard_id else None)
 
 
 @app.post("/red-flags")

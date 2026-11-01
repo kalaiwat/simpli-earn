@@ -27,6 +27,9 @@ from typing import Optional, Tuple, Dict, Any
 
 # Repo root (parent of scripts/)
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "RAG"))
+
+from youtube_ids import extract_video_id
 
 
 def load_env() -> None:
@@ -47,16 +50,6 @@ def get_supabase():
         print("❌ SUPABASE_URL and SUPABASE_KEY required")
         sys.exit(1)
     return create_client(url, key)
-
-
-def extract_video_id(youtube_url: str) -> Optional[str]:
-    if "v=" in youtube_url:
-        return youtube_url.split("v=")[1].split("&")[0]
-    if "youtu.be/" in youtube_url:
-        return youtube_url.split("youtu.be/")[1].split("?")[0]
-    if "youtube.com/live/" in youtube_url:
-        return youtube_url.split("youtube.com/live/")[1].split("?")[0]
-    return None
 
 
 def claim_one_pending(sb) -> Optional[Dict[str, Any]]:
