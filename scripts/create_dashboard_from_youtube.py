@@ -523,7 +523,18 @@ class DashboardCreator:
         
         # Cleanup
         self.cleanup()
-        
+
+        # The row above keeps the transcript usable (summary, chat) and stays incomplete, so submitting
+        # the link again repairs it. The job itself must fail: the dashboard would otherwise wait for
+        # sentiment charts that are never coming.
+        missing = [kind for kind in ('relevance', 'specificity') if not sentiment_filenames.get(f'{kind}_filename')]
+        if success and missing:
+            print(f"\n{'='*60}")
+            print(f"❌ Sentiment analysis failed ({', '.join(missing)}). "
+                  "The transcript was saved; submit the link again to retry the analysis.")
+            print(f"{'='*60}\n")
+            return False
+
         if success:
             print(f"\n{'='*60}")
             print(f"✅ SUCCESS! Dashboard entry created")
