@@ -36,6 +36,7 @@ Optional:
 - `HOME_YOUTUBE_POLL_SEC` (default `15`) — sleep when idle.
 - `HOME_YOUTUBE_ONCE=1` — process one job then exit (for **cron**).
 - `HOME_YOUTUBE_SCRIPT_TIMEOUT_SEC` — max seconds per pipeline run (default `7200`).
+  Jobs still `running` 10 minutes past this (the worker was killed mid-job, or its final status write was lost) are marked `failed` on the worker's next poll.
 
 ## 4. Frontend
 
