@@ -61,7 +61,7 @@ export default function ChatHistoryList({ controller, state, scope, onScopeChang
           </button>
         ))}
       </div>
-      <div className="min-h-0 flex-1 space-y-2 overflow-auto">
+      <div className="scrollbar-none min-h-0 flex-1 space-y-2 overflow-auto">
         {listLoading && <p className="text-xs text-muted-foreground">Loading history…</p>}
         {!listLoading && !sessions.length && <p className="text-xs text-muted-foreground">
           {all ? "No saved chats yet." : "No saved chats for this call."} Send a message to start one.</p>}
