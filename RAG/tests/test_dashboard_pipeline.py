@@ -47,3 +47,29 @@ def test_failed_sentiment_can_be_repaired_by_the_next_job(tmp_path):
     assert creator(tmp_path, store, FILES).process_youtube_video("https://youtube.com/watch?v=vid", write_mode="safe")
 
     assert store.rows["vid"]["specificity_filename"] == "s.csv"
+
+
+def test_concurrent_jobs_only_clean_up_their_own_files(tmp_path, monkeypatch):
+    monkeypatch.setattr(SCRIPT, "__file__", str(tmp_path / "scripts" / "create_dashboard_from_youtube.py"))
+    monkeypatch.setattr(SCRIPT, "create_client", lambda *_: None)
+    monkeypatch.setattr(SCRIPT.DashboardCreator, "load_env", lambda self: None)
+    first, second = SCRIPT.DashboardCreator(), SCRIPT.DashboardCreator()
+    (first.temp_dir / "audio.m4a").write_text("first")
+    (second.temp_dir / "audio.m4a").write_text("second")
+
+    first.cleanup()
+
+    assert not first.temp_dir.exists()
+    assert (second.temp_dir / "audio.m4a").read_text() == "second"
+    assert first.temp_dir.parent == second.temp_dir.parent == tmp_path / "temp_processing"
+
+
+def test_failed_download_cleans_up(tmp_path):
+    job_dir = tmp_path / "job"
+    job_dir.mkdir()
+    c = creator(job_dir, RowStore(), FILES)
+    c.download_audio = lambda _url: (job_dir / "partial.part").write_text("x") and None
+
+    assert not c.process_youtube_video("https://youtube.com/watch?v=vid")
+
+    assert not job_dir.exists()

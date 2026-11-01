@@ -16,7 +16,9 @@ Usage:
 import os
 import sys
 import json
+import shutil
 import subprocess
+import tempfile
 from datetime import datetime
 from pathlib import Path
 import requests
@@ -57,10 +59,11 @@ class DashboardCreator:
         
         aai.settings.api_key = os.getenv("ASSEMBLYAI_KEY")
         
-        # Set up directories
+        # Set up directories. Jobs run concurrently and cleanup removes the job's folder, so each
+        # job gets its own: a shared one would delete another job's audio mid-download.
         self.base_dir = Path(__file__).parent.parent
-        self.temp_dir = self.base_dir / "temp_processing"
-        self.temp_dir.mkdir(exist_ok=True)
+        (self.base_dir / "temp_processing").mkdir(exist_ok=True)
+        self.temp_dir = Path(tempfile.mkdtemp(prefix="job_", dir=self.base_dir / "temp_processing"))
         
     def load_env(self):
         """Load environment variables from .env files"""
@@ -443,8 +446,7 @@ class DashboardCreator:
         print("🧹 Cleaning up temporary files...")
         
         try:
-            for file in self.temp_dir.glob("*"):
-                file.unlink()
+            shutil.rmtree(self.temp_dir)
             print("✅ Cleanup complete")
         except Exception as e:
             print(f"⚠️  Cleanup warning: {e}")
@@ -495,6 +497,7 @@ class DashboardCreator:
         # Download audio
         audio_file = self.download_audio(youtube_url)
         if not audio_file:
+            self.cleanup()
             return False
             
         # Transcribe with AssemblyAI
