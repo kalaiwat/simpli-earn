@@ -442,9 +442,24 @@ def _chat_source_key(req: ChatRequest) -> Optional[str]:
     return None
 
 
-# Transcripts are public call data, so local copies are shared across conversations
+# Transcripts are public call data, so local copies are shared across conversations.
+# _chat_transcripts holds final ones (the pipeline's transcript, or a preloaded call). YouTube captions
+# only stand in until the pipeline's transcript exists, so a call chatted about while it is still
+# processing switches to that transcript once it lands.
 _chat_transcripts: dict[str, str] = {}
+_caption_transcripts: dict[str, str] = {}
 _chat_transcripts_lock = threading.Lock()
+
+
+def _cached_transcript(cache: dict[str, str], source_key: str) -> Optional[str]:
+    with _chat_transcripts_lock:
+        path = cache.get(source_key)
+    return path if path and os.path.exists(path) else None
+
+
+def _remember_transcript(cache: dict[str, str], source_key: str, path: str) -> None:
+    with _chat_transcripts_lock:
+        cache[source_key] = path
 
 
 def _write_atomically(path: str, text: str) -> None:
@@ -457,9 +472,8 @@ def _write_atomically(path: str, text: str) -> None:
 
 def _resolve_chat_transcript(req: ChatRequest, source_key: str) -> tuple[Optional[str], Optional[str]]:
     """Return (local transcript path, error response text)."""
-    with _chat_transcripts_lock:
-        cached = _chat_transcripts.get(source_key)
-    if cached and os.path.exists(cached):
+    cached = _cached_transcript(_chat_transcripts, source_key)
+    if cached:
         return cached, None
 
     if req.video_url:
@@ -485,18 +499,22 @@ def _resolve_chat_transcript(req: ChatRequest, source_key: str) -> tuple[Optiona
                 print(f"âš ï¸  Failed to load transcript from Supabase: {e}")
 
         if not transcript_path:
+            captions = _cached_transcript(_caption_transcripts, source_key)
+            if captions:
+                return captions, None
             print("ðŸ“¥ Fetching transcript from YouTube...")
             transcript = get_video_transcript(req.video_url)
             if "Error:" in transcript:
                 return None, transcript
-            transcript_path = save_transcript_in_uploads(req.video_url, transcript)
+            captions = save_transcript_in_uploads(req.video_url, transcript)
+            _remember_transcript(_caption_transcripts, source_key, captions)
+            return captions, None
     elif req.id in STATIC_TRANSCRIPTS:
         transcript_path = STATIC_TRANSCRIPTS[req.id]
     else:
         return None, "âŒ Unknown dashboard ID or missing transcript."
 
-    with _chat_transcripts_lock:
-        _chat_transcripts[source_key] = transcript_path
+    _remember_transcript(_chat_transcripts, source_key, transcript_path)
     return transcript_path, None
 
 
