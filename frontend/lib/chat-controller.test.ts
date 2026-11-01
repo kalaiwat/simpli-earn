@@ -4,7 +4,8 @@ import { ChatController, type ChatResult } from "./chat-controller.ts";
 import { chatSource } from "./chat-source.ts";
 import type { ChatRepository, ChatSession } from "./chat-store.ts";
 import type { ChatMessage } from "./chat-history.ts";
-import { chatHref, dashboardTicker, everyChat } from "./dashboards.ts";
+import { chatHref, dashboardLabel, dashboardTicker, everyChat, normalizeTicker, PRELOADED_DASHBOARDS } from "./dashboards.ts";
+import { readFileSync } from "node:fs";
 
 const source = chatSource("1", null);
 const session = (id: string): ChatSession => ({ id, user_id: "alice", dashboard_key: source.key,
@@ -379,4 +380,19 @@ test("dashboard labels and links cover preloaded and custom calls", () => {
   assert.equal(href.searchParams.get("ticker"), "NFLX");
   assert.equal(href.searchParams.get("chat"), "o1");
   assert.equal(new URL(chatHref(custom, null), "http://x").searchParams.has("ticker"), false);
+});
+
+test("every preloaded catalog dashboard has a ticker; unresolved chats get a named tag, never a blank", () => {
+  const catalog = JSON.parse(readFileSync(new URL("./preloaded_videos.json", import.meta.url), "utf8")) as Record<string, unknown>;
+  for (const id of Object.keys(catalog)) {
+    const ref = { dashboard_id: id, video_identifier: null };
+    assert.equal(dashboardLabel(ref, dashboardTicker(ref, new Map())), PRELOADED_DASHBOARDS[id]?.ticker, `dashboard ${id}`);
+  }
+  const video = { dashboard_id: null, video_identifier: "dQw4w9WgXcQ" };
+  for (const raw of [undefined, "", "   ", "N/A", " n/a "]) {
+    assert.equal(normalizeTicker(raw), null);
+    assert.equal(dashboardLabel(video, dashboardTicker(video, new Map([["dQw4w9WgXcQ", raw ?? ""]]))), "Video");
+  }
+  assert.equal(dashboardLabel({ dashboard_id: "999", video_identifier: null }, dashboardTicker({ dashboard_id: "999", video_identifier: null }, new Map())), "Other");
+  assert.equal(normalizeTicker(" nflx "), "NFLX");
 });

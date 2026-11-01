@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
 import type { ChatController, ChatState } from "@/lib/chat-controller";
 import type { ChatSession } from "@/lib/chat-store";
-import { chatHref, dashboardTicker, everyChat } from "@/lib/dashboards";
+import { chatHref, dashboardLabel, dashboardTicker, everyChat, normalizeTicker } from "@/lib/dashboards";
 import { useCustomTickers } from "@/lib/use-custom-tickers";
 
 /** This dashboard's chats, or every dashboard's */
@@ -28,8 +28,8 @@ export default function ChatHistoryList({ controller, state, scope, onScopeChang
   useEffect(() => { if (scope === "all") void controller.loadAll(); }, [scope, controller]);
 
   // A ticker typed into a custom link wins over the detected one, as on the charts
-  const currentTicker = (urlTicker && urlTicker !== "N/A" ? urlTicker.toUpperCase() : null)
-    ?? dashboardTicker({ dashboard_id: controller.source.id, video_identifier: controller.source.videoId }, customTickers);
+  const current = { dashboard_id: controller.source.id, video_identifier: controller.source.videoId };
+  const currentTicker = normalizeTicker(urlTicker) ?? dashboardTicker(current, customTickers);
   const tickerOf = (session: ChatSession) =>
     session.dashboard_key === key ? currentTicker : dashboardTicker(session, customTickers);
 
@@ -57,7 +57,7 @@ export default function ChatHistoryList({ controller, state, scope, onScopeChang
           <button key={value} type="button" aria-pressed={scope === value} onClick={() => onScopeChange(value)}
             className={`cursor-pointer truncate rounded-md px-2 py-1 transition-colors ${scope === value
               ? "bg-accent text-brand" : "text-muted-foreground hover:text-foreground"}`}>
-            {value === "all" ? "All chats" : currentTicker ? `${currentTicker} chats` : "This call"}
+            {value === "all" ? "All chats" : `${dashboardLabel(current, currentTicker)} chats`}
           </button>
         ))}
       </div>
@@ -90,7 +90,7 @@ export default function ChatHistoryList({ controller, state, scope, onScopeChang
                     onClick={() => open(session)}>{session.title}</button>
                   {/* Which dashboard the chat belongs to; same look as the Summary's timestamp pills, compact */}
                   {all && <span className="shrink-0 rounded-md border border-white/8 bg-pill px-1.5 py-0.5 text-[10px] font-medium leading-none text-foreground">
-                    {tickerOf(session) ?? "Custom"}</span>}
+                    {dashboardLabel(session, tickerOf(session))}</span>}
                 </div>
                 <div className="mt-2 flex items-center gap-3 text-muted-foreground">
                   <span className="mr-auto text-[10px]">{new Date(session.updated_at).toLocaleDateString()}</span>

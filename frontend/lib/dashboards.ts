@@ -12,11 +12,21 @@ export const PRELOADED_DASHBOARDS: Record<string, { ticker: string; date: string
 
 type DashboardRef = Pick<ChatSession, "dashboard_id" | "video_identifier">;
 
+/** A ticker as typed or detected: trimmed and upper-case; null when blank or "N/A". */
+export function normalizeTicker(raw: string | null | undefined) {
+  const ticker = raw?.trim().toUpperCase();
+  return ticker && ticker !== "N/A" ? ticker : null;
+}
+
 /** The ticker of a chat's dashboard: preloaded config, else the custom call's library ticker; null when unknown. */
 export function dashboardTicker(ref: DashboardRef, customTickers: ReadonlyMap<string, string>) {
-  if (ref.dashboard_id) return PRELOADED_DASHBOARDS[ref.dashboard_id]?.ticker ?? null;
-  return ref.video_identifier ? customTickers.get(ref.video_identifier) ?? null : null;
+  if (ref.dashboard_id) return normalizeTicker(PRELOADED_DASHBOARDS[ref.dashboard_id]?.ticker);
+  return ref.video_identifier ? normalizeTicker(customTickers.get(ref.video_identifier)) : null;
 }
+
+/** How the history names a chat's dashboard: its ticker, else "Video" (a custom call) or "Other". Never blank. */
+export const dashboardLabel = (ref: DashboardRef, ticker: string | null) =>
+  ticker ?? (ref.video_identifier ? "Video" : "Other");
 
 /** The dashboard a chat belongs to, opened on that chat. */
 export function chatHref(session: ChatSession, ticker: string | null) {
