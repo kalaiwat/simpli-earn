@@ -13,6 +13,8 @@ export type MessageRow = {
 };
 export interface ChatRepository {
   sessions(): Promise<ChatSession[]>;
+  /** The account's chats on every dashboard. */
+  allSessions(): Promise<ChatSession[]>;
   messages(id: string): Promise<ChatMessage[]>;
   /** A not-yet-saved chat for the list; /chat creates the real row with its first question. */
   draft(id: string, title: string): ChatSession;
@@ -47,15 +49,15 @@ export function messagesFromRows(rows: MessageRow[], source: string): ChatMessag
 
 export function createChatRepository(client: SupabaseClient, accountId: string, source: ChatSource): ChatRepository {
   const check = (error: { message: string } | null) => { if (error) throw new Error(error.message); };
+  const list = (dashboardKey: string | null) => allPages<ChatSession>(async (from, to) => {
+    let query = client.from("chat_sessions").select("*").eq("user_id", accountId);
+    if (dashboardKey) query = query.eq("dashboard_key", dashboardKey);
+    const { data, error } = await query.order("updated_at", { ascending: false }).order("id").range(from, to);
+    check(error); return data ?? [];
+  });
   return {
-    async sessions() {
-      return allPages<ChatSession>(async (from, to) => {
-        const { data, error } = await client.from("chat_sessions").select("*")
-          .eq("user_id", accountId).eq("dashboard_key", source.key)
-          .order("updated_at", { ascending: false }).order("id").range(from, to);
-        check(error); return data ?? [];
-      });
-    },
+    sessions: () => list(source.key),
+    allSessions: () => list(null),
     async messages(id) {
       const rows = await allPages<MessageRow>(async (from, to) => {
         const { data, error } = await client.from("chat_messages").select("*").eq("session_id", id)
