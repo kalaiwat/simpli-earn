@@ -234,7 +234,6 @@ async def create_dashboard(
     Jobs create the dashboard or repair an incomplete one, never replacing a complete analysis;
     `force` on a complete dashboard needs an admin (DASHBOARD_ADMIN_*) and replaces it.
     """
-    user = _request_user(authorization)
     video_id = extract_video_id(request.youtube_url)
     existing = _existing_analysis(video_id)
     complete = bool(existing) and all(existing.get(k) for k in _ANALYSIS_FILES)
@@ -248,6 +247,9 @@ async def create_dashboard(
         }
     write_mode = "safe"
     if complete:
+        # Only replacing a complete dashboard needs to know who is asking. Plain uploads never check
+        # the token, so a Supabase auth hiccup cannot turn a signed-in user's upload into a 401.
+        user = _request_user(authorization)
         if not _is_admin(user):
             if user is None:
                 raise HTTPException(status_code=401, detail="Sign in as an admin to reprocess an existing dashboard")
