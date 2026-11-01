@@ -43,7 +43,7 @@ No code changes required. The home page still polls `GET /dashboard/job-status/{
 
 ## 5. Local RAG without worker
 
-Unset `YOUTUBE_HOME_WORKER` (or set to `0`). Behavior returns to **in-memory jobs + subprocess** on the same machine as uvicorn.
+Unset `YOUTUBE_HOME_WORKER` (or set to `0`). Behavior returns to **subprocess jobs** on the same machine as uvicorn. Their status is also written to `youtube_jobs` (as `running`, never `pending`, so a worker would not claim them), so a status poll that reaches another Cloud Run instance still finds the job.
 
 ## Security
 
